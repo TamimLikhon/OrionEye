@@ -183,4 +183,54 @@ export const RunCommandTool: GeminiTool = {
   },
 };
 
-export const ALL_TOOLS = [ReadFileTool, WriteFileTool, ListFilesTool, GrepTool, WebInspectTool, RunCommandTool];
+export const SaveDeliverableTool: GeminiTool = {
+  declaration: {
+    name: "save_deliverable",
+    description: "Saves a formal pentest deliverable (analysis report or exploitation queue). Automatically validates JSON queues.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        deliverable_type: { 
+          type: SchemaType.STRING, 
+          description: "e.g., INJECTION_ANALYSIS, XSS_QUEUE, REPORT" 
+        },
+        path: { type: SchemaType.STRING, description: "Desired file path (relative to repo root)." },
+        content: { type: SchemaType.STRING, description: "Content string. For queues, MUST be valid JSON." },
+      },
+      required: ["deliverable_type", "path", "content"],
+    },
+  },
+  execute: async (args: any) => {
+    try {
+      await fs.ensureDir(path.dirname(args.path));
+      
+      // Basic JSON validation for queues
+      if (args.deliverable_type.endsWith("_QUEUE")) {
+        try {
+          JSON.parse(args.content);
+        } catch (e) {
+          return { error: "Deliverable type is a QUEUE but content is not valid JSON." };
+        }
+      }
+
+      await fs.writeFile(args.path, args.content);
+      return { 
+        success: true, 
+        message: `Deliverable [${args.deliverable_type}] saved to ${args.path}`,
+        validated: true 
+      };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  },
+};
+
+export const ALL_TOOLS = [
+  ReadFileTool, 
+  WriteFileTool, 
+  ListFilesTool, 
+  GrepTool, 
+  WebInspectTool, 
+  RunCommandTool,
+  SaveDeliverableTool
+];

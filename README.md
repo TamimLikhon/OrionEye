@@ -1,64 +1,42 @@
-# Shannon-Gemini
+# OrionEye (Shannon-Gemini)
 
-Shannon-Gemini is an autonomous AI penetration testing framework powered by Google's Gemini 1.5 Pro models. It is a port of the original Shannon framework (which uses Claude).
+OrionEye is an autonomous AI penetration testing framework powered by Google's Gemini 1.5 Pro models.
 
-## Features
+## 📋 Prerequisites
 
--   **Autonomous Reconnaissance:** Analyze target URLs and repositories to identify attack surfaces.
--   **Vulnerability Analysis:** (Planned) Detect Injection, XSS, Auth bypasses.
--   **Exploitation:** (Planned) Verify vulnerabilities with real exploits.
--   **Reporting:** (Planned) Generate comprehensive reports.
--   **Gemini-Powered:** Uses the Google Generative AI SDK with native Function Calling.
--   **Resilient Orchestration:** Built on Temporal.io for reliable long-running workflows.
+-   **Docker & Docker Compose**
+-   **Node.js (v20+)**
+-   **Google Cloud API Key** (with access to Gemini 1.5 Pro)
 
-## Prerequisites
-
--   Docker & Docker Compose
--   Node.js (v20+)
--   Google Cloud API Key (with access to Gemini 1.5 Pro)
-
-## Setup
+## 🛠️ Setup & Usage
 
 1.  **Clone/Navigate:**
     ```bash
-    cd shannon-gemini
+    cd OrionEye
     ```
 
 2.  **Environment:**
-    Create a `.env` file:
+    Create a `.env` file in the `OrionEye` directory:
     ```bash
     GOOGLE_API_KEY=your-gemini-api-key
     ```
 
-3.  **Build:**
+3.  **Start a Pentest:**
     ```bash
-    npm install
-    npm run build
+    ./orioneye start URL=https://example.com REPO=my-repo-name
+    ```
+    *Note: Ensure your target repository is placed inside `OrionEye/repos/`.*
+
+4.  **Monitor Progress:**
+    -   **Temporal UI:** `http://localhost:8233`
+    -   **Logs:** `./orioneye logs ID=<workflow-id>`
+
+5.  **Stop Services:**
+    ```bash
+    ./orioneye stop
+    # To remove all data/volumes:
+    ./orioneye stop CLEAN=true
     ```
 
-## Usage
-
-**Start the stack and run a pentest:**
-
-```bash
-./shannon-gemini start URL=https://example.com REPO=my-repo-name
-```
-
-*Note:* Ensure your target repository is placed inside `shannon-gemini/repos/`.
-
-## Architecture
-
--   `src/ai/gemini-executor.ts`: The core AI engine wrapping Google's Generative AI SDK.
--   `src/ai/tools.ts`: Tool definitions (File Read/Write, Shell Execution).
--   `src/agents/`: Specialized agents (Recon, etc.).
--   `src/temporal/`: Temporal workflow definitions and worker.
-
-## Development
-
--   **Build:** `npm run build` (runs `tsc`)
--   **Worker:** `npm run temporal:worker`
--   **Client:** `npm run temporal:start <url> <repo>`
-
-## License
-
-AGPL-3.0 (inherited from Shannon)
+---
+For detailed information about the project architecture, features, and roadmap, see [plan.md](./plan.md).

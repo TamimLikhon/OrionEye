@@ -1,9 +1,28 @@
+# Node.js
 node_modules/
-.env
-audit-logs/
 dist/
-repos/
 coverage/
-logs/
 *.log
-*.tmp 
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# OrionEye/Shannon Specific
+repos/
+audit-logs/
+*.tmp
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,34 +1,63 @@
 import { Context } from "@temporalio/activity";
+import { PreReconAgent } from "../agents/pre-recon.js";
 import { ReconAgent } from "../agents/recon.js";
-import { InjectionAgent } from "../agents/injection.js";
+import { VulnerabilityAgent, VulnType } from "../agents/vulnerability.js";
+import { ExploitationAgent } from "../agents/exploitation.js";
 import { ReportAgent } from "../agents/report.js";
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
-// Helper to get API key (in production, use a secure secret store or env)
+// Helper to get API key
 const getApiKey = () => process.env.GOOGLE_API_KEY || "";
+
+export async function runPreRecon(repoPath: string): Promise<string> {
+  Context.current().log.info(`Starting Pre-Recon on ${repoPath}`);
+  const agent = new PreReconAgent(getApiKey());
+  return await agent.run({ repoPath });
+}
 
 export async function runRecon(url: string, repoPath: string): Promise<any> {
   Context.current().log.info(`Starting Recon on ${url}`);
-  
-  if (!getApiKey()) {
-    throw new Error("GOOGLE_API_KEY is not set.");
-  }
-
   const agent = new ReconAgent(getApiKey());
-  const result = await agent.run({ url, repoPath });
-  
-  return result;
+  return await agent.run({ url, repoPath });
 }
 
-export async function runInjectionAnalysis(url: string, repoPath: string, reconResults: any): Promise<any> {
-  Context.current().log.info(`Starting Injection Analysis on ${url}`);
-  const agent = new InjectionAgent(getApiKey());
-  const result = await agent.run({ url, repoPath, reconFindings: reconResults });
-  return result;
+export async function runVulnerabilityAnalysis(
+  type: VulnType, 
+  url: string, 
+  repoPath: string, 
+  reconResults: any, 
+  codeAnalysis?: string
+): Promise<any> {
+  Context.current().log.info(`Starting ${type.toUpperCase()} Vulnerability Analysis`);
+  const agent = new VulnerabilityAgent(getApiKey(), type);
+  return await agent.run({ url, repoPath, reconFindings: reconResults, codeAnalysis });
 }
 
-export async function runReport(url: string, reconResults: any, injectionResults: any): Promise<any> {
+export async function runExploitation(
+  type: VulnType, 
+  url: string, 
+  repoPath: string, 
+  exploitationQueue: any
+): Promise<any> {
+  Context.current().log.info(`Starting ${type.toUpperCase()} Exploitation`);
+  const agent = new ExploitationAgent(getApiKey(), type);
+  return await agent.run({ url, repoPath, exploitationQueue });
+}
+
+export async function readExploitationQueue(repoPath: string, type: VulnType): Promise<any> {
+  const queuePath = path.join(repoPath, 'deliverables', `${type}_exploitation_queue.json`);
+  try {
+    const data = await fs.readFile(queuePath, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    Context.current().log.warn(`Could not read exploitation queue for ${type}: ${error}`);
+    return { vulnerabilities: [] };
+  }
+}
+
+export async function runReport(url: string, reconResults: any, allResults: any): Promise<any> {
   Context.current().log.info(`Starting Final Report generation`);
   const agent = new ReportAgent(getApiKey());
-  const result = await agent.run({ url, reconResults, injectionResults });
-  return result;
+  return await agent.run({ url, reconResults, allResults });
 }
