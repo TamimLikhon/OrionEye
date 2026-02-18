@@ -1,0 +1,16 @@
+# Example Configuration for Shannon-Gemini
+
+target:
+  url: "https://example.com"
+  repo_path: "/repos/example-repo"
+
+authentication:
+  enabled: false
+  username: "admin"
+  password: "password123"
+
+scope:
+  include:
+    - "/api/*"
+  exclude:
+    - "/logout"
