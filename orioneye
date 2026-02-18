@@ -1,0 +1,185 @@
+#!/bin/bash
+# OrionEye CLI - AI Penetration Testing Framework
+
+set -e
+
+# Prevent MSYS from converting Unix paths (e.g. /repos/my-repo) to Windows paths
+case "$OSTYPE" in
+  msys*) export MSYS_NO_PATHCONV=1 ;;
+esac
+
+COMPOSE_FILE="docker-compose.yml"
+
+# Load .env if present
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
+show_help() {
+  cat << 'EOF'
+
+   ____       _             ______            
+  / __ \_____(_)___  ____  / ____/_  _____  
+ / / / / ___/ / __ \/ __ \/ __/ / / / / _ \ 
+/ /_/ / /  / / /_/ / / / / /___/ /_/ /  __/ 
+\____/_/  /_/\____/_/ /_/_____/\__, /\___/  
+                              /____/        
+
+           Autonomous Pentesting
+
+Usage:
+  ./orioneye start URL=<url> REPO=<name>   Start a pentest workflow
+  ./orioneye logs ID=<workflow-id>         Tail logs for a specific workflow
+  ./orioneye stop                          Stop all containers
+  ./orioneye stop CLEAN=true                 Remove all data including volumes
+  ./orioneye help                          Show this help message
+
+Options for 'start':
+  REPO=<name>            Folder name under ./repos/ (e.g. REPO=repo-name)
+  REBUILD=true           Rebuild the worker container before starting
+
+Examples:
+  ./orioneye start URL=https://example.com REPO=repo-name
+  ./orioneye logs ID=example.com_orioneye-1234567890
+  ./orioneye stop CLEAN=true
+
+Monitor workflows at http://localhost:8233
+EOF
+}
+
+# Parse KEY=value arguments into variables
+parse_args() {
+  for arg in "$@"; do
+    case "$arg" in
+      URL=*) URL="${arg#URL=}" ;;
+      REPO=*) REPO="${arg#REPO=}" ;;
+      ID=*) ID="${arg#ID=}" ;;
+      CLEAN=*) CLEAN="${arg#CLEAN=}" ;;
+      REBUILD=*) REBUILD="${arg#REBUILD=}" ;;
+    esac
+  done
+}
+
+# Check if Temporal is running and healthy
+is_temporal_ready() {
+  docker compose -f "$COMPOSE_FILE" exec -T temporal \
+    temporal operator cluster health --address localhost:7233 2>/dev/null | grep -q "SERVING"
+}
+
+# Ensure containers are running
+ensure_containers() {
+  if is_temporal_ready; then
+    return 0
+  fi
+
+  echo "Starting OrionEye containers..."
+  if [ "$REBUILD" = "true" ]; then
+    docker compose -f "$COMPOSE_FILE" build --no-cache worker
+  fi
+  docker compose -f "$COMPOSE_FILE" up -d --build
+
+  echo "Waiting for Temporal to be ready..."
+  for i in $(seq 1 30); do
+    if is_temporal_ready; then
+      echo "Temporal is ready!"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Timeout waiting for Temporal"
+  exit 1
+}
+
+cmd_start() {
+  parse_args "$@"
+
+  if [ -z "$URL" ] || [ -z "$REPO" ]; then
+    echo "ERROR: URL and REPO are required"
+    show_help
+    exit 1
+  fi
+
+  if [ -z "$GOOGLE_API_KEY" ]; then
+    echo "ERROR: Set GOOGLE_API_KEY in .env"
+    exit 1
+  fi
+
+  # Determine container path for REPO
+  if [ ! -d "./repos/$REPO" ]; then
+    echo "ERROR: Repository not found at ./repos/$REPO"
+    exit 1
+  fi
+  CONTAINER_REPO="/repos/$REPO"
+
+  # Ensure directories exist
+  mkdir -p ./audit-logs
+  chmod 777 ./audit-logs
+  mkdir -p "./repos/$REPO/deliverables"
+  chmod 777 "./repos/$REPO/deliverables"
+
+  ensure_containers
+
+  echo "Submitting workflow for $URL (Repo: $REPO)..."
+  docker compose -f "$COMPOSE_FILE" exec -T worker \
+    node dist/temporal/client.js "$URL" "$CONTAINER_REPO"
+}
+
+cmd_logs() {
+  parse_args "$@"
+
+  if [ -z "$ID" ]; then
+    echo "ERROR: ID is required"
+    echo "Usage: ./orioneye logs ID=<workflow-id>"
+    exit 1
+  fi
+
+  # Simplified log tailing for the port
+  WORKFLOW_LOG="./audit-logs/${ID}/workflow.log"
+  
+  if [ -f "$WORKFLOW_LOG" ]; then
+    echo "Tailing workflow log: $WORKFLOW_LOG"
+    tail -f "$WORKFLOW_LOG"
+  else
+    # Fallback search
+    FOUND=$(find ./audit-logs -name "workflow.log" | grep "$ID" | head -1)
+    if [ -n "$FOUND" ]; then
+      echo "Tailing workflow log: $FOUND"
+      tail -f "$FOUND"
+    else
+      echo "ERROR: Workflow log not found for ID: $ID"
+      echo "Check Temporal UI at http://localhost:8233"
+      exit 1
+    fi
+  fi
+}
+
+cmd_stop() {
+  parse_args "$@"
+
+  if [ "$CLEAN" = "true" ]; then
+    docker compose -f "$COMPOSE_FILE" down -v
+  else
+    docker compose -f "$COMPOSE_FILE" down
+  fi
+}
+
+# Main command dispatch
+case "${1:-help}" in
+  start)
+    shift
+    cmd_start "$@"
+    ;;
+  logs)
+    shift
+    cmd_logs "$@"
+    ;;
+  stop)
+    shift
+    cmd_stop "$@"
+    ;;
+  help|--help|-h|*)
+    show_help
+    ;;
+esac

@@ -9,7 +9,8 @@ export abstract class BaseAgent {
       apiKey: string, 
       systemInstruction: string, 
       tools: GeminiTool[] = [], 
-      options: ExecutorOptions = {}
+      options: ExecutorOptions = {},
+      model: string = "gemini-1.5-pro"
   ) {
     // Default tools if none provided: ALL_TOOLS + RunAgentTool
     const finalTools = tools.length > 0 ? tools : [...ALL_TOOLS, RunAgentTool];
@@ -20,9 +21,10 @@ export abstract class BaseAgent {
       finalTools,
       { 
           temperature: 0.2, // Lower temp is better for agents
-          maxTurns: 30,
+          maxTurns: 100, // Increased default based on issues log
           ...options 
-      }
+      },
+      model
     );
   }
 
